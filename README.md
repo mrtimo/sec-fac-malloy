@@ -12,6 +12,7 @@ filing's detected reporting style, plus accounting-identity check columns.
 | path | what |
 |---|---|
 | `datasets/sec_fac/fac.malloy` | Malloy source `fac` — every column public and documented |
+| `datasets/sec_fac/lookups.malloy` | `sic_codes` (SEC industry titles + SIC hierarchy) and `tickers` (ticker by CIK), joined into `fac` as `industry` and `ticker` |
 | `datasets/sec_fac/index.malloy` | dataset entry point for malloyyo |
 
 The data (93 columns, ~54 MB parquet) is hosted on Hugging Face in
@@ -21,6 +22,14 @@ Malloy source reads it straight from there:
 ```
 https://huggingface.co/datasets/24601p/sec-data/resolve/main/fundamental_accounting_concepts_by_name.parquet
 ```
+
+Lookup files, also in [24601p/sec-data](https://huggingface.co/datasets/24601p/sec-data) under `lookups/`:
+
+| file | what |
+|---|---|
+| `SICcodes.csv` | SEC's SIC code list: code, reviewing SEC office, industry title (no header) |
+| `industry-groups.csv`, `major-groups.csv`, `divisions.csv` | 1987 SIC manual hierarchy |
+| `ticker.csv` | SEC ticker → CIK list, tab-separated (no header) |
 
 ## Things to know
 

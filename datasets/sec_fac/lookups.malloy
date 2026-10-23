@@ -1,0 +1,75 @@
+##! experimental.access_modifiers
+
+// Lookup tables joined into `fac`. The raw CSVs live in the Hugging Face
+// dataset 24601p/sec-data under lookups/, unchanged from their sources;
+// these sources reshape them to one row per key so the joins cannot fan out.
+
+#" SEC Standard Industrial Classification codes with the SEC review office and the 1987 SIC hierarchy (industry group, major group, division).
+#(agent) One row per 4-digit SIC code (444 codes, the SEC's own list, which covers every `sic` in `fac`). The hierarchy descriptions come from the 1987 SIC manual; `industry_group_description` is NULL for ~50 SEC-specific codes the manual does not define.
+source: sic_codes is duckdb.sql("""
+  SELECT
+    s.sic,
+    s.sec_office,
+    s.industry_title,
+    lpad((s.sic // 10)::VARCHAR, 3, '0')  AS industry_group,
+    ig.Description                        AS industry_group_description,
+    lpad((s.sic // 100)::VARCHAR, 2, '0') AS major_group,
+    mg.Description                        AS major_group_description,
+    mg.Division                           AS division,
+    d.Description                         AS division_description
+  FROM read_csv('https://huggingface.co/datasets/24601p/sec-data/resolve/main/lookups/SICcodes.csv',
+         header = false, columns = {'sic': 'INTEGER', 'sec_office': 'VARCHAR', 'industry_title': 'VARCHAR'}) s
+  LEFT JOIN read_csv('https://huggingface.co/datasets/24601p/sec-data/resolve/main/lookups/major-groups.csv', all_varchar = true) mg
+    ON mg.MajorGroup = lpad((s.sic // 100)::VARCHAR, 2, '0')
+  LEFT JOIN read_csv('https://huggingface.co/datasets/24601p/sec-data/resolve/main/lookups/industry-groups.csv', all_varchar = true) ig
+    ON ig.IndustryGroup = lpad((s.sic // 10)::VARCHAR, 3, '0')
+  LEFT JOIN read_csv('https://huggingface.co/datasets/24601p/sec-data/resolve/main/lookups/divisions.csv', all_varchar = true) d
+    ON d.Division = mg.Division
+""") include {
+  public:
+    #" 4-digit SIC code.
+    sic
+    #" SEC Division of Corporation Finance office that reviews filers with this code (e.g. Office of Technology).
+    sec_office
+    #" SEC industry title for the code, upper case (e.g. ELECTRONIC COMPUTERS).
+    industry_title
+    #" 3-digit SIC industry group code (e.g. '357').
+    industry_group
+    #" Industry group name (e.g. Computer And Office Equipment); NULL for SEC-specific codes.
+    industry_group_description
+    #" 2-digit SIC major group code (e.g. '35').
+    major_group
+    #" Major group name (e.g. Industrial And Commercial Machinery And Computer Equipment).
+    major_group_description
+    #" SIC division letter, A–J (e.g. 'D').
+    division
+    #" Division name (e.g. Manufacturing; Finance, Insurance, And Real Estate).
+    division_description
+} extend {
+  primary_key: sic
+}
+
+#" Stock ticker symbols by SEC CIK, from the SEC's company ticker list.
+#(agent) One row per CIK. Companies with several listed securities (share classes, preferreds) have their primary ticker in `ticker` and every ticker in `all_tickers`. The list is a current snapshot: about half the companies in `fac` (delisted or never listed) have no ticker.
+source: tickers is duckdb.sql("""
+  SELECT
+    cik,
+    upper(arg_min(ticker, rn))                    AS ticker,
+    upper(string_agg(ticker, ', ' ORDER BY rn))   AS all_tickers
+  FROM (
+    SELECT *, row_number() OVER () AS rn
+    FROM read_csv('https://huggingface.co/datasets/24601p/sec-data/resolve/main/lookups/ticker.csv',
+           header = false, delim = '\t', columns = {'ticker': 'VARCHAR', 'cik': 'INTEGER'})
+  )
+  GROUP BY cik
+""") include {
+  public:
+    #" SEC Central Index Key.
+    cik
+    #" Primary ticker symbol, upper case (e.g. AAPL, BRK-B).
+    ticker
+    #" Every ticker listed for the company, primary first (e.g. 'BRK-B, BRK-A').
+    all_tickers
+} extend {
+  primary_key: cik
+}
