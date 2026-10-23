@@ -1,0 +1,259 @@
+##! experimental.access_modifiers
+
+// Fundamental Accounting Concepts from the SEC Financial Statement and Notes
+// data sets: one row per 10-K / 10-Q filing, with the ~200,000 XBRL tags US
+// filers use normalised into ~60 comparable concepts (Charles Hoffman's
+// "Seattle Method"), imputed according to each filing's detected reporting
+// style.
+
+#" One row per SEC 10-K/10-Q filing (2009–2026): ~60 normalised income statement, balance sheet and cash flow concepts per company and period.
+#(agent) Grain: one row per submission (`adsh`). 397,225 filings from 14,755 companies (`cik`), filed 2009-04 to 2026-07.
+#(agent) Values come from the SEC Financial Statement and Notes data sets: consolidated parent-entity facts only (no dimensional breakdowns), for the filing's own current period. Each concept is the highest-priority XBRL tag the filer reported, then gaps are filled by the imputation rules of the filing's reporting `style`.
+#(agent) Income statement and cash flow values are FISCAL YEAR-TO-DATE, not quarterly: a Q2 10-Q covers 6 months, Q3 covers 9 months, FY covers the full year. For annual comparisons filter `fp = 'FY'` (or `is_annual`); do not sum quarters.
+#(agent) Balance sheet values are as of `period` (an instant).
+#(agent) Amounts are in the filer's reporting currency (`reporting_uom`, 99.8% USD). Filter `reporting_uom = 'USD'` before summing across companies.
+#(agent) NULL means the filing's reporting style does not present that concept (e.g. banks have no gross_profit), not zero. Amendments (forms ending /A) duplicate earlier filings; exclude them for one row per company-period.
+#(agent) The `*_check` columns are accounting-identity residuals: 0 (within rounding) means the identity holds; a large value flags a data problem in that filing.
+source: fac is duckdb.table('https://huggingface.co/datasets/24601p/sec-data/resolve/main/fundamental_accounting_concepts_by_name.parquet') include {
+  public:
+    // ---- filing identity --------------------------------------------------
+    #" SEC accession number, the unique ID of a submission (e.g. 0000320193-24-000123).
+    adsh
+    #" SEC Central Index Key, the permanent ID of the filing company.
+    cik
+    #" Company name as registered with the SEC at the time of filing.
+    name
+    #" SEC form type: 10-K (annual), 10-Q (quarterly), 10-KT/10-QT (transition), /A = amendment.
+    form
+    #" Fiscal year the filing reports on, as text (e.g. '2024').
+    fy
+    #" Fiscal period: FY (full year), Q1, Q2, Q3; rare values H2, T1, Q4.
+    fp
+    #" Balance sheet date (end of the reporting period), rounded to month end.
+    period
+    #" Date the filing was accepted by the SEC.
+    filed
+    #" Filer status: 1-LAF large accelerated, 2-ACC accelerated, 3-SRA smaller reporting accelerated, 4-NON non-accelerated, 5-SML smaller reporting company.
+    afs
+    #" Standard Industrial Classification code assigned by the SEC (4 digits; first digit is the division).
+    sic
+    #" Currency all amounts in this row are reported in (ISO code, e.g. USD, CAD).
+    reporting_uom
+
+    // ---- reporting style --------------------------------------------------
+    #" Detected reporting style (how the company presents its statements), e.g. SPEC6 multi-step commercial, INTBX bank, INSBX insurer.
+    style
+    #" Full ReportFrameCode for the style: entity kind, BS classified/unclassified, cash flow, IS roll-up, equity-method placement, operating-income line, variant.
+    style_code
+    #" Confidence of the style detection: high, medium or low.
+    style_confidence
+
+    // ---- income statement (fiscal year-to-date) ---------------------------
+    #" Total revenues (Revenues / RevenueFromContractWithCustomer... tags).
+    revenues
+    #" Cost of revenue / cost of goods and services sold.
+    cost_of_revenue
+    #" Gross profit: revenues minus cost of revenue (multi-step styles only).
+    gross_profit
+    #" Operating expenses (excluding cost of revenue).
+    operating_expenses
+    #" Total costs and expenses, for styles that report one combined cost line.
+    costs_and_expenses
+    #" Other operating income included in operating income.
+    other_operating_income
+    #" Operating income (loss).
+    operating_income_loss
+    #" Nonoperating income (loss), including interest and other non-core items.
+    nonoperating_income_loss
+    #" Income (loss) from equity-method investments.
+    income_loss_from_equity_method_investments
+    #" Income (loss) from continuing operations before income taxes.
+    income_loss_before_tax
+    #" Income tax expense (positive) or benefit (negative).
+    income_tax_expense_benefit
+    #" Income (loss) from continuing operations after income taxes.
+    income_loss_after_tax
+    #" Income (loss) from discontinued operations, net of tax.
+    discontinued_operations
+    #" Extraordinary items, net of tax.
+    extraordinary_items
+    #" Net income (loss), including noncontrolling interests.
+    net_income_loss
+    #" Net income (loss) attributable to the parent company.
+    net_income_loss_parent
+    #" Net income (loss) attributable to noncontrolling interests.
+    net_income_loss_nci
+    #" Preferred stock dividends and other adjustments.
+    preferred_stock_dividends
+    #" Net income (loss) available to common stockholders, basic.
+    net_income_available_to_common
+    #" Other comprehensive income (loss).
+    other_comprehensive_income
+    #" Comprehensive income (loss), including noncontrolling interests.
+    comprehensive_income
+    #" Comprehensive income (loss) attributable to the parent.
+    comprehensive_income_parent
+    #" Comprehensive income (loss) attributable to noncontrolling interests.
+    comprehensive_income_nci
+
+    // ---- balance sheet (as of period) -------------------------------------
+    #" Total assets.
+    assets
+    #" Current assets (classified balance sheets only).
+    current_assets
+    #" Noncurrent assets (classified balance sheets only).
+    noncurrent_assets
+    #" Total liabilities.
+    liabilities
+    #" Current liabilities (classified balance sheets only).
+    current_liabilities
+    #" Noncurrent liabilities (classified balance sheets only).
+    noncurrent_liabilities
+    #" Commitments and contingencies line on the balance sheet.
+    commitments_and_contingencies
+    #" Temporary (mezzanine) equity.
+    temporary_equity
+    #" Redeemable noncontrolling interest.
+    redeemable_nci
+    #" Total equity, including noncontrolling interests.
+    equity
+    #" Equity attributable to the parent (stockholders' equity).
+    equity_parent
+    #" Equity attributable to noncontrolling interests.
+    equity_nci
+    #" Total liabilities and equity.
+    liabilities_and_equity
+
+    // ---- cash flow statement (fiscal year-to-date) ------------------------
+    #" Net cash provided by (used in) operating activities.
+    net_cash_flows_operating
+    #" Operating cash flow from continuing operations.
+    net_cash_flows_operating_continuing
+    #" Operating cash flow from discontinued operations.
+    net_cash_flows_operating_discontinued
+    #" Net cash provided by (used in) investing activities.
+    net_cash_flows_investing
+    #" Investing cash flow from continuing operations.
+    net_cash_flows_investing_continuing
+    #" Investing cash flow from discontinued operations.
+    net_cash_flows_investing_discontinued
+    #" Net cash provided by (used in) financing activities.
+    net_cash_flows_financing
+    #" Financing cash flow from continuing operations.
+    net_cash_flows_financing_continuing
+    #" Financing cash flow from discontinued operations.
+    net_cash_flows_financing_discontinued
+    #" Net cash flow from continuing operations.
+    net_cash_flows_continuing
+    #" Net cash flow from discontinued operations.
+    net_cash_flows_discontinued
+    #" Effect of exchange rate changes on cash.
+    exchange_gains_losses
+    #" Net increase (decrease) in cash and cash equivalents.
+    net_cash_flow
+
+    // ---- bank (INTBX) income statement lines ------------------------------
+    #" Interest and dividend income, operating (banks).
+    interest_and_dividend_income_operating
+    #" Interest expense, operating (banks).
+    interest_expense_operating
+    #" Net interest income (banks).
+    interest_income_expense_net
+    #" Provision for loan, lease and other losses (banks).
+    provision_for_loan_lease_losses
+    #" Net interest income after provision for losses (banks).
+    interest_income_after_provision
+    #" Noninterest income (banks).
+    noninterest_income
+    #" Noninterest expense (banks).
+    noninterest_expense
+
+    // ---- combined operating + nonoperating lines (IS3/IS4/IS6/IS8 styles) -
+    #" Revenues reported as one combined operating and nonoperating line.
+    operating_and_nonoperating_revenues
+    #" Costs reported as one combined operating and nonoperating line.
+    operating_and_nonoperating_costs
+    #" Indirect operating and nonoperating costs.
+    indirect_operating_nonoperating_costs
+
+    // ---- accounting-identity checks (0 = identity holds) ------------------
+    #" Equity − (equity_parent + equity_nci).
+    bs1_check
+    #" Assets − liabilities_and_equity (balance sheet balances).
+    bs2_check
+    #" Assets − (current_assets + noncurrent_assets); NULL for unclassified balance sheets.
+    bs3_check
+    #" Liabilities − (current_liabilities + noncurrent_liabilities); NULL for unclassified balance sheets.
+    bs4_check
+    #" Liabilities_and_equity − (liabilities + commitments + temporary_equity + equity).
+    bs5_check
+    #" Style-specific top-of-income-statement check, e.g. gross_profit − (revenues − cost_of_revenue).
+    is1_check
+    #" Style-specific operating income check, e.g. operating_income − (gross_profit − operating_expenses + other_operating_income).
+    is2_check
+    #" Unused (always NULL).
+    is3_check
+    #" Income before tax − (operating income + nonoperating income), or the style's equivalent roll-up.
+    is4_check
+    #" Income after tax − (income before tax − income tax).
+    is5_check
+    #" Net income − (income after tax + discontinued operations + extraordinary items).
+    is6_check
+    #" Net income − (net_income_parent + net_income_nci).
+    is7_check
+    #" Net income to common − (net_income_parent − preferred dividends).
+    is8_check
+    #" Comprehensive income − (comprehensive_income_parent + comprehensive_income_nci).
+    is9_check
+    #" Comprehensive income − (net income + other comprehensive income).
+    is10_check
+    #" Unused (always NULL).
+    is11_check
+    #" Net cash flow − (operating + investing + financing + exchange effects).
+    cf1_check
+    #" Net cash flow − (continuing + discontinued + exchange effects).
+    cf2_check
+    #" Discontinued cash flow − (operating + investing + financing discontinued).
+    cf3_check
+    #" Operating cash flow − (continuing + discontinued operating cash flow).
+    cf4_check
+} extend {
+  primary_key: adsh
+
+  #" Calendar year of the balance sheet date (period); use fy for the company's fiscal year.
+  dimension: period_year is year(period)
+  #" True for annual reports (10-K, 10-KT and their amendments).
+  dimension: is_annual is form ? '10-K' | '10-K/A' | '10-KT' | '10-KT/A'
+  #" True for amended filings (form ends in /A).
+  dimension: is_amendment is form ~ '%/A'
+  #" SIC division (first digit of sic), e.g. 2–3 manufacturing, 6 finance.
+  dimension: sic_division is floor(sic / 1000)
+
+  #" Number of filings.
+  measure: filings is count()
+  #" Number of distinct companies.
+  measure: companies is count(cik)
+  #" Sum of revenues (filter to one currency first).
+  measure: total_revenues is revenues.sum()
+  #" Sum of net income (filter to one currency first).
+  measure: total_net_income is net_income_loss.sum()
+  #" Sum of total assets (filter to one currency first).
+  measure: total_assets is assets.sum()
+  #" Percent of filings whose balance sheet balances (|bs2_check| ≤ 1).
+  measure: pct_balance_sheet_balances is
+    avg(pick 1 when abs(coalesce(bs2_check, 0)) <= 1 else 0) * 100
+
+  #" Filings and companies by detected reporting style.
+  view: by_style is {
+    group_by: style, style_code
+    aggregate: filings, companies
+    order_by: filings desc
+  }
+
+  #" Annual (FY, USD, non-amended) revenue, net income and assets by company and year.
+  view: annual_financials is {
+    where: fp = 'FY', reporting_uom = 'USD', not is_amendment
+    select: cik, name, fy, period, revenues, net_income_loss, assets, equity, net_cash_flows_operating
+    order_by: name, period
+  }
+}

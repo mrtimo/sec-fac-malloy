@@ -1,0 +1,5 @@
+##" Fundamental accounting concepts for every 10-K and 10-Q in the SEC Financial Statement and Notes data sets, 2009–2026.
+## dataset { title="SEC Fundamental Accounting Concepts" }
+
+import { fac } from 'fac.malloy'
+export { fac }
