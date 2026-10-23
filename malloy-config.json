@@ -1,5 +1,8 @@
 {
   "connections": {
-    "duckdb": { "is": "duckdb" }
+    "duckdb": {
+      "is": "duckdb",
+      "setupSQL": "SET home_directory='/tmp';\nINSTALL httpfs;\nLOAD httpfs;\n"
+    }
   }
 }
