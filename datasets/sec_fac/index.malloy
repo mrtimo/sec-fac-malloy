@@ -2,4 +2,5 @@
 ## dataset { title="SEC Fundamental Accounting Concepts" }
 
 import { fac } from 'fac.malloy'
-export { fac }
+import { company_years } from 'lookups.malloy'
+export { fac, company_years }

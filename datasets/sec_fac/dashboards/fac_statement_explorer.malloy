@@ -1,0 +1,9 @@
+import "../index.malloy"
+
+// The page is drawn by fac_statement_explorer.jsx, which builds its queries at
+// runtime from the selected company, year and peer settings. This query only
+// anchors the dashboard.
+
+#" One company's fundamental accounting concepts for a fiscal year, with its identity checks and industry peers.
+# artifact { title="FAC Statement Explorer (Teaching)" }
+query: fac_statement_explorer is fac -> { aggregate: filings, companies }

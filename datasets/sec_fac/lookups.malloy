@@ -73,3 +73,37 @@ source: tickers is duckdb.sql("""
 } extend {
   primary_key: cik
 }
+
+#" One row per company and fiscal year with an original 10-K: name, ticker, SIC industry codes and names, and annual revenue.
+#(agent) A small pre-built table (scripts/build_company_years.sql) for pickers and company directories; it reads much faster than `fac`. One row per `cik` and `fy`, taken from the company's original (non-amended) 10-K for that fiscal year. For anything beyond revenue, query `fac`.
+#(agent) `revenues` is NULL for the reporting styles that have no revenue line: banks (INTBX), insurers (INSBX) and IS6 filers. Amounts are in `reporting_uom`.
+source: company_years is duckdb.table('https://huggingface.co/datasets/24601p/sec-data/resolve/main/company_years.parquet') include {
+  public:
+    #" SEC Central Index Key.
+    cik
+    #" Fiscal year, as text (e.g. '2024').
+    fy
+    #" Company name on that year's 10-K.
+    name
+    #" Primary ticker from the SEC's current ticker list; NULL for unlisted or delisted companies.
+    ticker
+    #" 4-digit SIC code on that year's 10-K.
+    sic
+    #" SEC industry title for the SIC code (e.g. ELECTRONIC COMPUTERS).
+    industry_title
+    #" 3-digit SIC industry group code (e.g. '357').
+    industry_group
+    #" Industry group name; NULL for SEC-specific codes.
+    industry_group_description
+    #" 2-digit SIC major group code (e.g. '35').
+    major_group
+    #" Major group name.
+    major_group_description
+    #" Annual revenue from that year's 10-K, in reporting_uom; NULL when the style has no revenue line.
+    revenues
+    #" Currency of revenues (ISO code, e.g. USD).
+    reporting_uom
+} extend {
+  #" Number of distinct companies.
+  measure: companies is count(cik)
+}
